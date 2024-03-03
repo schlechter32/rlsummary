@@ -22,9 +22,10 @@ def compute_returns(next_value, rewards, masks, device, gamma=0.99):
 
 
 def train_agent(env, net, policy, optimizer, num_episodes, maze_size, device):
-    # maze_input_dim = np.prod(maze_size)
-    # pos_input_dim = np.prod(maze_size)
-    # action_dim = env.action_space.n
+    # maze_input_dinv.action_space.n
+    # Logging returns
+    reward_logs = []
+    episode_logs = []
     policy_net = net
 
     # policy_net = PolicyNetwork(maze_input_dim, pos_input_dim, action_dim).to(device)
@@ -89,6 +90,8 @@ def train_agent(env, net, policy, optimizer, num_episodes, maze_size, device):
         optimizer.step()
 
         print(f"Episode {episode + 1}: Total Reward: {total_reward}")
+        reward_logs.append(total_reward)
+    return reward_logs
 
 
 # def old_main():
