@@ -56,7 +56,9 @@ class MazeEnv(gym.Env):
         if self.maze[y, x] == 0:  # If not a wall
             self.agent_pos = [y, x]
 
-        terminated = self.agent_pos == [8, 8]  # Check for goal
+        terminated = self.agent_pos == [8, 8] or self.maze[y, x] == 1
+        # terminated = True
+        # terminated = self.agent_pos == [8, 8]  # Check for goal
         truncated = (
             False  # In this simple example, we don't have a condition for truncation
         )
