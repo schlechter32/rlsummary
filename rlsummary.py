@@ -37,8 +37,4 @@ xs = [x for x in range(len(reward_logs))]
 plt.plot(xs, reward_logs)
 plt.show()
 # %% Debug returns
-print
 # %% [markdown]
-# # Some Markdown
-# - some list
-# $\lambda$
