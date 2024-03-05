@@ -446,6 +446,53 @@ In Actor-Critic methods, the critic estimates value functions (\(V(s)\) or \(Q(s
 
 loss or gain
 
+## Generalized Advantage Estimation (GAE)
+
+Generalized Advantage Estimation (GAE), introduced by John Schulman et al. in 2016, is a method for estimating the advantage function in policy gradient methods, particularly in Proximal Policy Optimization (PPO). GAE aims to find a balance between bias and variance in the advantage estimates to facilitate more stable and efficient policy learning.
+
+### Advantage Function
+
+The advantage function, \(A(s, a)\), quantifies the relative benefit of taking action \(a\) in state \(s\) compared to following the current policy \(\pi\). It is defined as:
+
+$$ A(s, a) = Q(s, a) - V(s) $$
+
+where \(Q(s, a)\) represents the action-value function, and \(V(s)\) is the state-value function.
+
+### Temporal Difference (TD) Error
+
+A key component in advantage estimation is the temporal difference (TD) error, \(\delta_t\), which for a given time step \(t\), is defined as:
+
+$$ \delta_t = r_t + \gamma V(s_{t+1}) - V(s_t) $$
+
+Here, \(r_t\) is the reward received at time \(t\), \(V(s_t)\) is the current state's value, \(V(s_{t+1})\) is the next state's value, and \(\gamma\) is the discount factor.
+
+### Generalized Advantage Estimation (GAE)
+
+GAE calculates the advantage by combining TD errors across multiple timesteps, applying an exponential decay parameter \(\lambda\) to modulate the significance of future TD errors. The GAE formula for the advantage at time \(t\) is:
+
+$$ A^{GAE}(\gamma, \lambda)_t = \sum_{l=0}^{\infty} (\gamma \lambda)^l \delta_{t+l} $$
+
+In practice, this sum is truncated for computational efficiency, either at the episode's end or after a certain number of steps.
+
+### The GAE Function in PPO
+
+The `compute_gae` function performs the following steps:
+
+1. **Calculate TD Errors**: Compute the TD error for each time step in a trajectory, based on observed rewards, current and next state values, and the discount factor \(\gamma\).
+
+2. **Calculate GAE**: Compute the exponentially weighted sum of future TD errors for each time step to obtain GAE, using \(\gamma\) and \(\lambda\) for decay control. This is typically done backwards from the end of the episode.
+
+3. **Normalize GAEs**: (Optional) Normalize the computed GAEs to have zero mean and unit variance, which can help stabilize training.
+
+These GAEs provide a more stable and lower-variance estimate of the advantages, utilized to update the policy and value networks in PPO.
+
+#### Benefits of GAE
+
+- **Bias-Variance Trade-off**: GAE allows for a flexible balance between bias and variance in advantage estimates through the adjustment of \(\lambda\).
+- **Stability and Efficiency**: Enhanced advantage estimates contribute to more stable and efficient policy updates, potentially improving learning speed.
+
+GAE is thus a crucial advancement for estimating advantages in policy gradient methods, supporting the effectiveness of PPO in complex reinforcement learning challenges.
+
 ### Actor
 
 policy
