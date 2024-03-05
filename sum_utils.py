@@ -21,6 +21,7 @@ def compute_returns(next_value, rewards, masks, device, gamma=0.99):
     return torch.tensor(returns, device=device).unsqueeze(1)
 
 
+# Generalized advante expectation
 def compute_gae(next_value, rewards, masks, values, gamma=0.99, tau=0.95):
     values = values + [next_value]
     gae = 0
