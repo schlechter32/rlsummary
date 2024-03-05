@@ -21,7 +21,18 @@ def compute_returns(next_value, rewards, masks, device, gamma=0.99):
     return torch.tensor(returns, device=device).unsqueeze(1)
 
 
-def train_agent(env, net, policy, optimizer, num_episodes, maze_size, device):
+def compute_gae(next_value, rewards, masks, values, gamma=0.99, tau=0.95):
+    values = values + [next_value]
+    gae = 0
+    returns = []
+    for step in reversed(range(len(rewards))):
+        delta = rewards[step] + gamma * values[step + 1] * masks[step] - values[step]
+        gae = delta + gamma * tau * masks[step] * gae
+        returns.insert(0, gae + values[step])
+    return returns
+
+
+def train_agent_REINFORCE(env, net, policy, optimizer, num_episodes, maze_size, device):
     # maze_input_dinv.action_space.n
     # Logging returns
     reward_logs = []
@@ -76,6 +87,79 @@ def train_agent(env, net, policy, optimizer, num_episodes, maze_size, device):
             else policy_net(maze_input, pos_input)[1]
         )
         returns = compute_returns(next_value, rewards, masks, device)
+
+        log_probs = torch.stack(log_probs)
+        values = torch.cat(values).squeeze(-1)
+
+        advantage = returns - values
+        actor_loss = -(log_probs * advantage.detach()).mean()
+        critic_loss = 0.5 * advantage.pow(2).mean()
+
+        optimizer.zero_grad()
+        total_loss = actor_loss + critic_loss
+        total_loss.backward()
+        optimizer.step()
+
+        print(f"Episode {episode + 1}: Total Reward: {total_reward}")
+        reward_logs.append(total_reward)
+    return reward_logs
+
+
+def train_agent_PPO(env, net, policy, optimizer, num_episodes, maze_size, device):
+    # maze_input_dinv.action_space.n
+    # Logging returns
+    reward_logs = []
+    episode_logs = []
+    policy_net = net
+
+    # policy_net = PolicyNetwork(maze_input_dim, pos_input_dim, action_dim).to(device)
+    # optimizer = optim.Adam(policy_net.parameters(), lr=1e-2)
+
+    for episode in range(num_episodes):
+        state, _ = env.reset()
+        done = False
+        total_reward = 0
+
+        log_probs = []
+        values = []
+        rewards = []
+        masks = []
+        # action_index_values = [(0, "down"), (1, "right"), (2, "up"), (3, "left")]
+        # action_dict = dict(action_index_values)
+
+        while not done:
+            maze_layout = env.maze.flatten()
+            maze_input = (
+                torch.tensor(maze_layout, dtype=torch.float32).unsqueeze(0).to(device)
+            )
+            # print("maze input is", maze_input)
+            # print("state: ", state)
+
+            pos_input = encode_position(state, maze_size, device)
+            # print("pos input is", pos_input)
+
+            action_probs, value = policy_net(maze_input, pos_input)
+            action = policy(action_probs, max(0.05, 0.1 - 0.01 * (episode // 100)))
+            # print("Action:", action_dict[action])
+
+            log_prob = torch.log(action_probs.squeeze(0)[action])
+            next_state, reward, done, _, _ = env.step(action)
+            # print("done:", done)
+
+            log_probs.append(log_prob)
+            values.append(value)
+            rewards.append(reward)
+            masks.append(1.0 - done)
+
+            state = next_state
+            total_reward += reward
+
+        next_value = (
+            torch.tensor([0], device=device)
+            if done
+            else policy_net(maze_input, pos_input)[1]
+        )
+        returns = compute_gae(next_value, rewards, masks, device)
 
         log_probs = torch.stack(log_probs)
         values = torch.cat(values).squeeze(-1)

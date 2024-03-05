@@ -4,7 +4,7 @@ import torch.optim as optim
 import numpy as np
 from maze_env import MazeEnv
 from policy_network import PolicyNetwork
-from sum_utils import train_agent
+from sum_utils import train_agent_REINFORCE
 from policies import epsilon_greedy_policy, pure_stochastic
 import matplotlib.pyplot as plt
 # %% Markdowncell
@@ -27,8 +27,12 @@ pos_input_dim = np.prod(maze_size)
 policy_net = PolicyNetwork(maze_input_dim, pos_input_dim, action_dim).to(device)
 policy = pure_stochastic
 optimizer = optim.Adam(policy_net.parameters(), lr=1e-2)
-# %% Training
-reward_logs = train_agent(
+# %% Training of REINFORCE
+reward_logs = train_agent_REINFORCE(
+    env, policy_net, policy, optimizer, num_episodes, maze_size, device
+)
+# %% Ttraining of PPO
+reward_logs = train_agent_PPO(
     env, policy_net, policy, optimizer, num_episodes, maze_size, device
 )
 # %% visu training

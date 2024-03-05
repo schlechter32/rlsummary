@@ -290,7 +290,47 @@ $$ \nabla_{\theta} J(\theta) = \mathbb{E}_{\tau \sim \pi_{\theta}} \left[ \sum_{
 
 The policy gradient theorem shows that the gradient of the expected return with respect to policy parameters is the expected sum of the gradients of the log probabilities of actions, weighted by the return. This forms the basis for policy gradient methods like REINFORCE, where the gradient is estimated from samples and used to update the policy parameters in the direction of increased expected return.
 
-## REINFORCE
+### REINFORCE: Monte Carlo Policy Gradient Method
+
+REINFORCE, also known as the Monte Carlo Policy Gradient method, optimizes reinforcement learning policies by adjusting policy parameters to maximize expected returns. It employs the policy gradient theorem for gradient ascent.
+
+#### Algorithm Overview
+
+REINFORCE involves the following steps:
+
+1. **Initialize the Policy**: Represent the policy with a neural network with parameters \(\theta\), mapping states to action probabilities.
+
+2. **Generate Episodes**: Use the current policy to generate complete episodes. An episode consists of tuples \((s_0, a_0, r_1, s_1, a_1, ..., s_{T-1}, a_{T-1}, r_T)\) until reaching a terminal state.
+
+3. **Compute Returns**: Calculate the return \(G_t\) for each step within each episode as \(G_t = \sum_{k=0}^{\infty} \gamma^k r_{t+k+1}\), where \(\gamma\) is the discount factor.
+
+4. **Policy Gradient Update**: Perform a gradient ascent on the policy parameters \(\theta\) by updating in the direction of actions leading to higher returns:
+   $$ \nabla_{\theta} J(\theta) = \mathbb{E}_{\pi}\left[ \sum_{t=0}^{T-1} \nabla_{\theta} \log \pi_{\theta}(a_t|s_t) G_t \right] $$
+   The gradient is estimated by averaging over the sampled episodes.
+
+5. **Repeat**: Update the policy with new episodes and iterate the process.
+
+#### Key Characteristics
+
+- **Monte Carlo Method**: REINFORCE requires complete episodes for updates, making it suitable for episodic tasks.
+
+- **Sample Efficiency**: It may suffer from sample inefficiency due to reliance on complete episodes and the potential high variance in returns.
+
+- **Exploration**: Initially facilitated by the policy's stochastic nature, but additional mechanisms (e.g., entropy regularization) may be needed for sustained exploration.
+
+- **No Value Function**: Unlike Actor-Critic methods, REINFORCE does not use a separate value function estimator, trading off complexity for potentially higher variance.
+
+#### Variance Reduction Techniques
+
+High variance in gradient estimates can slow convergence. Techniques to reduce variance include:
+
+- **Baseline Subtraction**: Using a baseline value subtracted from the returns in the gradient estimate can reduce variance. A common baseline is a state-value function.
+
+- **Advantage Function**: Applying the advantage function \(A(s, a) = Q(s, a) - V(s)\) instead of the direct return \(G_t\). This concept is more directly used in Actor-Critic methods.
+
+#### Conclusion
+
+REINFORCE offers a direct method for optimizing policy gradients based on sampled episode returns. While its simplicity is attractive, efficiency can be enhanced with variance reduction techniques or employing advanced policy gradient methods like PPO or TRPO.
 ## Advantage Actor-Critic (A2C) Algorithm
 
 Advantage Actor-Critic (A2C) combines value-based and policy-based methods, using two networks: the actor for action selection and the critic for value estimation.
