@@ -23,15 +23,23 @@ def compute_returns(next_value, rewards, masks, device, gamma=0.99):
 
 
 # Generalized advante expectation
-def compute_gae(next_value, rewards, masks, values, gamma=0.99, tau=0.95):
+def compute_gae(
+    next_value, rewards, masks, values, gamma=0.99, lambda_gae=0.95, device="cpu"
+):
     values = values + [next_value]
     gae = 0
     returns = []
-    for step in reversed(range(len(rewards))):
-        delta = rewards[step] + gamma * values[step + 1] * masks[step] - values[step]
-        gae = delta + gamma * tau * masks[step] * gae
-        returns.insert(0, gae + values[step])
-    return returns
+    advantages = torch.zeros_like(torch.tensor(rewards)).to(device)
+
+    for t in reversed(range(len(rewards))):
+        delta = rewards[t] + gamma * values[t + 1] * masks[t] - values[t]
+        gae = delta + gamma * lambda_gae * masks[t] * gae
+        advantages[t] = gae
+        returns.insert(0, gae + values[t])
+
+    # print(returns)
+    returns = torch.tensor(returns).to(device)
+    return returns, advantages
 
 
 def train_agent_REINFORCE(env, net, policy, optimizer, num_episodes, maze_size, device):
@@ -162,13 +170,13 @@ def train_agent_PPO(
 
         next_value = 0 if done else net(maze_input, pos_input)[1]
         returns, advantages = compute_gae(
-            next_value, rewards, masks, values, gamma, lambda_gae, device
+            next_value, rewards, masks, values, gamma, lambda_gae
         )
 
         # Convert lists to tensors
         log_probs = torch.stack(log_probs)
-        returns = torch.cat(returns)
-        advantages = torch.cat(advantages)
+        # returns = torch.cat(returns)
+        # advantages = torch.cat(advantages)
         values = torch.cat(values)
         states = torch.cat(states)
         actions = torch.tensor(actions, device=device)
