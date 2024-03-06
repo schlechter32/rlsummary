@@ -7,7 +7,11 @@ from policy_network import PolicyNetwork
 from sum_utils import train_agent_REINFORCE, train_agent_PPO
 
 from policies import epsilon_greedy_policy, pure_stochastic
+import matplotlib
+
+matplotlib.use("Qt5Agg")
 import matplotlib.pyplot as plt
+
 # %% Markdowncell
 
 # %% Deivce setup
@@ -17,7 +21,7 @@ print(f"Using device: {device}")
 
 env = MazeEnv()
 
-num_episodes = 1000
+num_episodes = 5
 maze_size = (9, 9)
 
 action_dim = env.action_space.n
