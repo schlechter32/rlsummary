@@ -33,13 +33,13 @@ policy_net = PolicyNetwork(maze_input_dim, pos_input_dim, action_dim).to(device)
 policy = pure_stochastic
 optimizer = optim.Adam(policy_net.parameters(), lr=1e-2)
 # %% Training of REINFORCE
-reward_logs = train_agent_REINFORCE(
+# reward_logs = train_agent_REINFORCE(
+#     env, policy_net, policy, optimizer, num_episodes, maze_size, device
+# )
+# %% Ttraining of PPO
+reward_logs = train_agent_PPO(
     env, policy_net, policy, optimizer, num_episodes, maze_size, device
 )
-# %% Ttraining of PPO
-# reward_logs = train_agent_PPO(
-# env, policy_net, policy, optimizer, num_episodes, maze_size, device
-# )
 # %% visu training
 xs = [x for x in range(len(reward_logs))]
 
