@@ -2,9 +2,13 @@ import numpy as np
 import torch
 
 
-def epsilon_greedy_policy(action_probs, epsilon=0.1):
+def epsilon_greedy_policy(action_probs, epsilon=0.001):
     if np.random.rand() < epsilon:
-        return np.random.randint(action_probs.size(1))
+        # print(action_probs)
+
+        selected = np.random.randint(action_probs.size())[0]
+        # print(f"selected index {selected}")
+        return selected
     else:
         return torch.argmax(action_probs).item()
 
@@ -23,7 +27,10 @@ def epsilon_greedy_policy(action_probs, epsilon=0.1):
 # However, this approach is typically used during evaluation of the policy rather than during training, where exploration is necessary.
 def pure_stochastic(action_probs, rand_decay=0.99):
     # Convert the action probabilities to a multinomial distribution and then sample
+    # print(f"Action probs are {action_probs}")
+
     action = torch.distributions.Categorical(action_probs).sample()
+    # print(f"Action is {action.item()}")
     return (
         action.item()
     )  # Assuming you need the action as a Python integer for the environment

@@ -1,4 +1,5 @@
 # %% Imports
+import matplotlib.pyplot as plt
 import torch
 import torch.optim as optim
 import numpy as np
@@ -9,8 +10,7 @@ from sum_utils import train_agent_REINFORCE, train_agent_PPO
 from policies import epsilon_greedy_policy, pure_stochastic
 import matplotlib
 
-matplotlib.use("Qt5Agg")
-import matplotlib.pyplot as plt
+# matplotlib.use("Qt5Agg")
 
 # %% Markdowncell
 
@@ -37,7 +37,7 @@ optimizer = optim.Adam(policy_net.parameters(), lr=1e-2)
 #     env, policy_net, policy, optimizer, num_episodes, maze_size, device
 # )
 # %% Ttraining of PPO
-reward_logs = train_agent_PPO(
+reward_logs = train_agent_REINFORCE(
     env, policy_net, policy, optimizer, num_episodes, maze_size, device
 )
 # %% visu training

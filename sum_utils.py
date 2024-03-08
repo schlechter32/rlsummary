@@ -53,7 +53,7 @@ def train_agent_REINFORCE(env, net, policy, optimizer, num_episodes, maze_size, 
     # optimizer = optim.Adam(policy_net.parameters(), lr=1e-2)
 
     for episode in range(num_episodes):
-        state, _ = env.reset()
+        state = env.reset()
         done = False
         total_reward = 0
 
@@ -72,10 +72,11 @@ def train_agent_REINFORCE(env, net, policy, optimizer, num_episodes, maze_size, 
             # print("maze input is", maze_input)
             # print("state: ", state)
 
-            pos_input = encode_position(state, maze_size, device)
+            # pos_input = encode_position(state, maze_size, device)
             # print("pos input is", pos_input)
 
-            action_probs, value = policy_net(maze_input, pos_input)
+            # action_probs, value = policy_net(maze_input, pos_input)
+            action_probs, value = policy_net(env.observation_space_tensor)
             action = policy(action_probs, max(0.05, 0.1 - 0.01 * (episode // 100)))
             # print("Action:", action_dict[action])
 
@@ -132,7 +133,7 @@ def train_agent_PPO(
     reward_logs = []
 
     for episode in range(num_episodes):
-        state, _ = env.reset()
+        state = env.reset()
         done = False
         total_reward = 0
 
@@ -151,7 +152,8 @@ def train_agent_PPO(
             )
             pos_input = encode_position(state, maze_size, device)
 
-            action_probs, value = net(maze_input, pos_input)
+            # action_probs, value = net(maze_input, pos_input)
+            actio_probs, value = net(env.observation_space_tensor)
             action = policy(action_probs, max(0.05, 0.1 - 0.01 * (episode // 100)))
 
             log_prob = torch.log(action_probs.squeeze(0)[action])
