@@ -4,9 +4,53 @@ import torch.optim as optim
 import numpy as np
 from torch.distributions import Categorical
 
+# import matplotlib.pyplot as plt
+
+import plotext as plt
+
+
+import plotext as plt
+
+
+def plot_rewards_terminal(rewards):
+    plt.clc()  # Clear previous plots to ensure a fresh start (use clp() instead of clear_plot())
+
+    # Plot the rewards
+    plt.plot(rewards, color="cyan", marker="dot")
+
+    # Customize the plot
+    plt.title("Training Rewards Over Episodes")
+    plt.xlabel("Episode")
+    plt.ylabel("Total Reward")
+
+    # Attempting to set grid lines (if available in your version of plotext)
+    # Else, you might need to remove this if it causes errors
+    try:
+        plt.grid(True, axis="both", color="green", linestyle="--", linewidth=0.5)
+    except TypeError:
+        plt.grid(True)  # Use without the unsupported keyword arguments
+
+    # Unfortunately, plotext does not support setting the number of ticks directly as matplotlib does
+    # But you can set the limits and labels manually if needed
+
+    # Show plot
+    plt.show()
+
+
 # Check for GPU availability
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Running on device: {device}")
+
+
+def visualize_rewards(rewards):
+    plt.figure(figsize=(10, 5))
+    plt.plot(rewards, label="Rewards per Episode")
+    plt.xlabel("Episode")
+    plt.ylabel("Total Reward")
+    plt.title("Training Rewards Over Episodes")
+    plt.legend()
+    plt.show()
+
 
 # Environment setup
 
@@ -72,6 +116,20 @@ class GridEnvironmentWithWalls(GridEnvironment):
         reward = -1
         done = self.state == self.goal
         return self.state, reward, done
+
+
+# Value Network (Critic)
+class ValueNetwork(nn.Module):
+    def __init__(self, input_size, output_size=1):
+        super(ValueNetwork, self).__init__()
+        self.fc = nn.Sequential(
+            nn.Linear(input_size, 128),
+            nn.ReLU(),
+            nn.Linear(128, output_size),
+        )
+
+    def forward(self, x):
+        return self.fc(x)
 
 
 class PolicyNetwork(nn.Module):
@@ -143,12 +201,77 @@ def simulate_episode_for_visualization(policy_network, env, max_steps=100):
     return path
 
 
+def a2c(
+    policy_network,
+    value_network,
+    optimizer_policy,
+    optimizer_value,
+    env,
+    episodes,
+    gamma=0.99,
+):
+    for episode in range(episodes):
+        saved_log_probs = []
+        saved_values = []
+        rewards = []
+        state = env.reset()
+        done = False
+
+        policy_network.train()
+        value_network.train()
+
+        while not done:
+            state_tensor = env.state_to_tensor(state).float().to(device)
+            action_probs = policy_network(state_tensor)
+            value = value_network(state_tensor)
+
+            distribution = Categorical(action_probs)
+            action = distribution.sample()
+            saved_log_probs.append(distribution.log_prob(action))
+            saved_values.append(value)
+
+            state, reward, done = env.step(action.item())
+            rewards.append(reward)
+
+        # Compute returns and advantages
+        returns = []
+        advantages = []
+        R = 0
+        for i in reversed(range(len(rewards))):
+            R = rewards[i] + gamma * R
+            advantage = R - saved_values[i]
+            returns.append(R)
+            advantages.append(advantage)
+
+        # Update policy network (actor)
+        policy_loss = [
+            -log_prob * advantage.detach()
+            for log_prob, advantage in zip(saved_log_probs, advantages)
+        ]
+        policy_loss = torch.cat(policy_loss).sum()
+        optimizer_policy.zero_grad()
+        policy_loss.backward()
+        optimizer_policy.step()
+
+        # Update value network (critic)
+        value_loss = [advantage.pow(2) for advantage in advantages]
+        value_loss = torch.cat(value_loss).sum()
+        optimizer_value.zero_grad()
+        value_loss.backward()
+        optimizer_value.step()
+
+        if episode % 10 == 0:
+            visualize_path(env, simulate_episode_for_visualization(policy_network, env))
+            print(f"Episode {episode}: Total Reward = {sum(rewards)}")
+
+
 def reinforce(
     policy_network, optimizer, env, episodes, gamma=0.99, early_stopping_rounds=10
 ):
     policy_network.to(device)  # Ensure the network is on the correct device
     no_improvement_count = 0
     last_total_reward = None
+    total_rewards = []
 
     for episode in range(episodes):
         policy_network.train()
@@ -168,6 +291,7 @@ def reinforce(
             rewards.append(reward)
 
         total_reward = sum(rewards)
+        total_rewards.append(total_reward)
         if last_total_reward is not None and total_reward <= last_total_reward:
             no_improvement_count += 1
         else:
@@ -198,6 +322,7 @@ def reinforce(
         if episode % 10 == 0:
             visualize_path(env, simulate_episode_for_visualization(policy_network, env))
             print(f"Episode {episode}: Total Reward = {sum(rewards)}")
+    return total_rewards
 
 
 # Policy network and optimizer setup
@@ -239,4 +364,15 @@ complicated_walls = [
 env = GridEnvironmentWithWalls(size=9, walls=complicated_walls)
 
 # Training with visualization
-reinforce(policy_net, optimizer, env, episodes=1000)
+
+value_net = ValueNetwork(input_size).to(device)
+optimizer_policy = optim.Adam(policy_net.parameters(), lr=0.01)
+optimizer_value = optim.Adam(value_net.parameters(), lr=0.01)
+
+# Training with A2C
+# a2c(policy_net, value_net, optimizer_policy, optimizer_value, env, episodes=1000)
+# Training with reinforce
+total_rewards = reinforce(policy_net, optimizer, env, episodes=1000)
+
+# Plotting of rewards
+plot_rewards_terminal(total_rewards)
