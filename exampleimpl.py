@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 import numpy as np
 from torch.distributions import Categorical
 
@@ -201,7 +202,89 @@ def simulate_episode_for_visualization(policy_network, env, max_steps=100):
     return path
 
 
-def a2c(
+def compute_returns(rewards, gamma, device):
+    R = 0
+    returns = []
+    for r in reversed(rewards):
+        R = r + gamma * R
+        returns.insert(0, R)
+    return torch.tensor(returns, dtype=torch.float32, device=device)
+
+
+def normalize(advantages):
+    if advantages.std() > 0:
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+    return advantages
+
+
+def evaluate_actions(policy_network, value_network, states, actions):
+    action_probs = policy_network(states)
+    dist = Categorical(action_probs)
+
+    # Evaluate actions
+    log_probs = dist.log_prob(actions)
+    entropy = dist.entropy()
+
+    # Evaluate state values
+    state_values = value_network(states)
+
+    return log_probs, state_values, entropy
+
+
+def collect_trajectories(env, policy_network, episodes_per_update):
+    memories = []
+    for _ in range(episodes_per_update):
+        state = env.reset()
+        done = False
+        print("Started new run")
+        while not done:
+            state_tensor = env.state_to_tensor(state).float().to(device)
+            with torch.no_grad():
+                action_probs = policy_network(state_tensor)
+            distribution = Categorical(action_probs)
+            action = distribution.sample()
+
+            next_state, reward, done = env.step(action.item())
+            # print(f"Action is {action}")
+
+            # Store the experience
+            memories.append(
+                {
+                    "state": state_tensor,
+                    "action": action,
+                    "reward": reward,
+                    "log_prob": distribution.log_prob(action),
+                }
+            )
+            state = next_state
+
+    return memories
+
+
+def compute_advantages(memories, value_network, gamma, tau=0.95):
+    running_add = 0
+    advantages = []
+    returns = []
+    for i in reversed(range(len(memories))):
+        if i == len(memories) - 1:
+            next_value = 0
+        else:
+            next_value = value_network(memories[i + 1]["state"]).item()
+        td_error = (
+            memories[i]["reward"]
+            + gamma * next_value
+            - value_network(memories[i]["state"]).item()
+        )
+        running_add = td_error + gamma * tau * running_add
+        advantages.insert(0, running_add)
+        returns.insert(0, running_add + value_network(memories[i]["state"]).item())
+
+    return torch.tensor(advantages, dtype=torch.float, device=device), torch.tensor(
+        returns, dtype=torch.float, device=device
+    )
+
+
+def ppo(
     policy_network,
     value_network,
     optimizer_policy,
@@ -209,7 +292,112 @@ def a2c(
     env,
     episodes,
     gamma=0.99,
+    epsilon=0.1,
+    ppo_steps=4,
+    episodes_per_update=10,
+    visualize_every=20,
+    early_stopping_rounds=10,
 ):
+    policy_network.to(device)
+    value_network.to(device)
+    rewards_log = []
+
+    best_avg_reward = float("-inf")
+    no_improvement_count = 0
+
+    for update in range(episodes // episodes_per_update):
+        print("Started making memories")
+        memories = collect_trajectories(env, policy_network, episodes_per_update)
+        print("Computing advantages from memories")
+        advantages, returns = compute_advantages(memories, value_network, gamma)
+
+        # Prepare data for PPO update
+        # Assuming `memories` is a list of dictionaries containing 'state', 'action', 'log_prob', and 'reward'
+        states = torch.stack([m["state"] for m in memories]).to(device)
+        actions = torch.tensor([m["action"] for m in memories], dtype=torch.long).to(
+            device
+        )
+        old_log_probs = torch.tensor(
+            [m["log_prob"] for m in memories], dtype=torch.float
+        ).to(device)
+
+        print("Updating Actor in Critic")
+        for _ in range(ppo_steps):
+            # Calculate current log probabilities and values
+            log_probs, state_values, entropy = evaluate_actions(
+                policy_network, value_network, states, actions
+            )
+            ratios = torch.exp(log_probs - old_log_probs.detach())
+
+            # Clipped surrogate function
+            surr1 = ratios * advantages
+            surr2 = torch.clamp(ratios, 1 - epsilon, 1 + epsilon) * advantages
+            policy_loss = -torch.min(surr1, surr2).mean() - 0.01 * entropy.mean()
+            value_loss = F.mse_loss(state_values.squeeze(-1), returns)
+
+            optimizer_policy.zero_grad()
+            optimizer_value.zero_grad()
+            (policy_loss + value_loss).backward()
+            optimizer_policy.step()
+            optimizer_value.step()
+
+        # Calculate average reward for this update's episodes
+        avg_reward = np.sum([m["reward"] for m in memories])
+        rewards_log.append(avg_reward)
+
+        # Early stopping
+        if avg_reward > best_avg_reward:
+            best_avg_reward = avg_reward
+            no_improvement_count = 0
+        else:
+            no_improvement_count += 1
+
+        if no_improvement_count >= early_stopping_rounds:
+            print(
+                f"Early stopping triggered after {
+                    update + 1} updates with no improvement."
+            )
+            break
+
+        # print(f"Current update is {update}")
+        # print(
+        #     f"Trying to visualize every {visualize_every}, for {
+        #         episodes_per_update} episodes_per_update"
+        # )
+        # print(f"The math result is{visualize_every // episodes_per_update}")
+        #
+        # print(
+        #     f"Running visu test{(update + 1) %
+        #                         (visualize_every // episodes_per_update)}"
+        # )
+        if (update + 1) % (visualize_every // episodes_per_update) == 0:
+            print(f"Update {update + 1}: Average Total Reward = {avg_reward}")
+            path = simulate_episode_for_visualization(policy_network, env)
+            visualize_path(env, path)
+
+    return rewards_log
+
+
+def a2c(
+    policy_network,
+    value_network,
+    optimizer_policy,
+    optimizer_value,
+    scheduler_policy,
+    scheduler_value,
+    env,
+    episodes,
+    gamma=0.99,
+    entropy_beta=0.01,
+    early_stopping_rounds=50,
+):
+    policy_network.to(device)
+    value_network.to(device)
+    rewards_log = []
+
+    best_reward = float("-inf")
+    episodes_since_improvement = 0
+
     for episode in range(episodes):
         saved_log_probs = []
         saved_values = []
@@ -217,52 +405,79 @@ def a2c(
         state = env.reset()
         done = False
 
-        policy_network.train()
-        value_network.train()
-
         while not done:
             state_tensor = env.state_to_tensor(state).float().to(device)
             action_probs = policy_network(state_tensor)
-            value = value_network(state_tensor)
+            value = value_network(state_tensor).squeeze()
 
             distribution = Categorical(action_probs)
             action = distribution.sample()
-            saved_log_probs.append(distribution.log_prob(action))
+            log_prob = distribution.log_prob(action)
+            saved_log_probs.append(log_prob)
             saved_values.append(value)
 
             state, reward, done = env.step(action.item())
             rewards.append(reward)
 
+        total_reward = sum(rewards)
+        rewards_log.append(total_reward)
+
+        if total_reward > best_reward:
+            best_reward = total_reward
+            episodes_since_improvement = 0
+        else:
+            episodes_since_improvement += 1
+
+        if episodes_since_improvement >= early_stopping_rounds:
+            print(f"Early stopping triggered after {episode + 1} episodes.")
+            break
+
         # Compute returns and advantages
-        returns = []
-        advantages = []
-        R = 0
-        for i in reversed(range(len(rewards))):
-            R = rewards[i] + gamma * R
-            advantage = R - saved_values[i]
-            returns.append(R)
-            advantages.append(advantage)
+        returns = compute_returns(rewards, gamma, device)
 
-        # Update policy network (actor)
-        policy_loss = [
-            -log_prob * advantage.detach()
-            for log_prob, advantage in zip(saved_log_probs, advantages)
-        ]
-        policy_loss = torch.cat(policy_loss).sum()
+        saved_log_probs = torch.stack(saved_log_probs)
+        saved_values = torch.stack(saved_values).squeeze(-1)
+        advantages = returns - saved_values
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+        # Compute losses
+        policy_loss = -(saved_log_probs * advantages.detach()).mean()
+        value_loss = F.mse_loss(saved_values, returns)
+
+        # Entropy regularization
+        entropy_loss = entropy_beta * distribution.entropy().mean()
+
+        # Total loss
+        total_loss = policy_loss + value_loss - entropy_loss
+
+        # Perform backpropagation
         optimizer_policy.zero_grad()
-        policy_loss.backward()
-        optimizer_policy.step()
-
-        # Update value network (critic)
-        value_loss = [advantage.pow(2) for advantage in advantages]
-        value_loss = torch.cat(value_loss).sum()
         optimizer_value.zero_grad()
-        value_loss.backward()
+        total_loss.backward()
+        optimizer_policy.step()
         optimizer_value.step()
+
+        # Update the learning rate
+        scheduler_policy.step()
+        scheduler_value.step()
 
         if episode % 10 == 0:
             visualize_path(env, simulate_episode_for_visualization(policy_network, env))
             print(f"Episode {episode}: Total Reward = {sum(rewards)}")
+
+    return rewards_log
+
+
+# Compute returns helper function
+
+
+def compute_returns(rewards, gamma, device):
+    R = 0
+    returns = []
+    for r in reversed(rewards):
+        R = r + gamma * R
+        returns.insert(0, R)
+    return torch.tensor(returns, dtype=torch.float32, device=device)
 
 
 def reinforce(
@@ -369,10 +584,31 @@ value_net = ValueNetwork(input_size).to(device)
 optimizer_policy = optim.Adam(policy_net.parameters(), lr=0.01)
 optimizer_value = optim.Adam(value_net.parameters(), lr=0.01)
 
-# Training with A2C
-# a2c(policy_net, value_net, optimizer_policy, optimizer_value, env, episodes=1000)
+# Initialize learning rate schedulers
+scheduler_policy = torch.optim.lr_scheduler.StepLR(
+    optimizer_policy, step_size=100, gamma=0.99
+)
+scheduler_value = torch.optim.lr_scheduler.StepLR(
+    optimizer_value, step_size=100, gamma=0.99
+)
 # Training with reinforce
-total_rewards = reinforce(policy_net, optimizer, env, episodes=1000)
+# total_rewards = reinforce(policy_net, optimizer, env, episodes=1000)
+
+# Training with A2C
+# total_rewards = a2c(
+#     policy_net,
+#     value_net,
+#     optimizer_policy,
+#     optimizer_value,
+#     scheduler_policy,
+#     scheduler_value,
+#     env,
+#     episodes=1000,
+# )
+# Training with ppo
+
+total_rewards = ppo(policy_net, value_net, optimizer_policy, optimizer_value, env, 1000)
+# ppo(policy_net, value_net, optimizer, env, 1000)
 
 # Plotting of rewards
 plot_rewards_terminal(total_rewards)
