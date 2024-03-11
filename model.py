@@ -34,8 +34,8 @@ class RlModel:
         for state, action, Gt in zip(states, actions, returns):
             # Forward pass to get action probabilities
             action_probs = self.neuralnet(state)
-            print(f"actionprobs in update {action_probs}")
-            log_probs = F.log(action_probs, dim=-1)
+            # print(f"actionprobs in update {action_probs}")
+            log_probs = torch.log(action_probs)
 
             # Select the log probability for the taken action
             selected_log_prob = log_probs[action]

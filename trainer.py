@@ -21,6 +21,7 @@ class Trainer:
         self.device = "cuda"
         self.actions = []
         self.states = []
+        self.no_episode = 0
 
     def a2c(self):
         # maze_input_dinv.action_space.n
@@ -106,14 +107,23 @@ class Trainer:
 
     def reinforce(self):
         for episode in range(self.train_episodes):
+            self.no_eisode = episode
             self.generate_episode()
             self.compute_returns()
             print(
                 f"Episode reward for {episode} was {
                     self.total_reward}",
-                end="\r",
+                end="\n",
             )
-            self.model.update(self.states, self.actions, self.returns)
+            # print(f"States buffer is {self.states}")
+            # self.states = torch.tensor(self.states)
+            # self.actions = torch.tensor(self.actions)
+            # self.returns = torch.tensor(self.returns)
+            self.model.update(
+                self.states,
+                self.actions,
+                self.returns,
+            )
             self.clear_episode_buffers()
 
     def compute_returns(self):
@@ -157,26 +167,33 @@ class Trainer:
         rewards = []
         # values = []
         # masks = []
-        log_probs = []
+        log_probs_buffer = []
         total_reward = 0
         done = False
         state = self.env.reset()
         rewards = []
         states = []
+        next_states = []
         # states.append(state)
         while not done:
-            action_probs = self.model.neuralnet(self.env.observation_space_tensor)
-            action = self.policy(action_probs)
-            log_prob = torch.log(action_probs)
-            states.append(state)
+            action_probs = self.model.neuralnet(
+                self.env.observation_space_tensor.to(self.device)
+            )
+            action = self.policy(action_probs, self.no_episode)
+            log_probs = torch.log(action_probs)
+            # print(f"State after append is {state}")
             next_state, reward, done, _, _ = self.env.step(action)
+            states.append(next_state)
+            next_states.append(next_state)
+            state = next_state
             actions.append(action)
-            log_probs.append(log_prob)
+            log_probs_buffer.append(log_probs)
             rewards.append(reward)
             total_reward += reward
 
         self.actions = actions
-        self.states = states
+        self.states = torch.stack(states).to(self.device)
+        # print(f"Stacked states are {self.states}")
         self.log_probs.append(log_probs)
         self.rewards = rewards
         self.total_reward = total_reward

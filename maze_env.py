@@ -66,54 +66,63 @@ class MazeEnv(gym.Env):
         return self.observation_space_tensor
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, dict]:
-        assert self.action_space.contains(action), "%r (%s) invalid" % (
-            action,
-            type(action),
-        )
+        assert self.action_space.contains(action), f"{action} ({type(action)}) invalid"
         y, x = self.agent_pos
+        prev_position = self.agent_pos.copy()
+        invalid_penalty = 0.5
+
+        # Define action effects
         if action == 0:  # up
-            y = max(0, y - 1)
-            y = y - 1 if y - 1 > 0 else 8
+            if y > 0 and self.maze[y - 1, x] == 0:
+                y -= 1
+            else:
+                reward = (
+                    -invalid_penalty
+                )  # Penalize for hitting a wall or making invalid move
         elif action == 1:  # right
-            x = min(x + 1, 8)
+            if x < 8 and self.maze[y, x + 1] == 0:
+                x += 1
+            else:
+                reward = -invalid_penalty
         elif action == 2:  # down
-            y = min(y + 1, 8)
+            if y < 8 and self.maze[y + 1, x] == 0:
+                y += 1
+            else:
+                reward = -invalid_penalty
         elif action == 3:  # left
-            x = max(0, x - 1)
+            if x > 0 and self.maze[y, x - 1] == 0:
+                x -= 1
+            else:
+                reward = -invalid_penalty
 
-        if self.maze[y, x] == 0:  # If not a wall
-            self.agent_pos = [y, x]
+        # Update agent position if move is valid
+        self.agent_pos = [y, x]
 
+        # Update observation based on new state
         self.update_observation_from_state()
-        terminated = (
-            self.agent_pos == [8, 8] or self.maze[y, x] == 1 or self.step_count > 3000
-        )
 
-        # terminated = self.agent_pos == [8, 8] or self.step_count > 1000
+        # Check if the episode should terminate
+        terminated = self.agent_pos == [8, 8]
         self.step_count += 1
-        # terminated = True
-        # terminated = self.agent_pos == [8, 8]  # Check for goal
-        truncated = (
-            False  # In this simple example, we don't have a condition for truncation
-        )
-        # Reward for reaching the goal or moving
-        goal_reached = True if self.agent_pos == [8, 8] else False
-        if goal_reached:
-            print(f" Goal reached ")
-            pass
-        reward = 1 if self.agent_pos == [8, 8] else -0.01
-        if self.maze[y, x] == 1:
-            reward -= 1
-        info = {}
-        # print(self.agent_pos)
-        # reward -= self.calc_distance(self.agent_pos, [8, 8])
 
-        # print(self.agent_pos)
-        # print(self.maze)
-        # print(self.observation_space)
-        # print(self.observation_space_tensor)
+        # Set termination criteria (e.g., reaching the goal or maximum steps)
+        max_steps = 1000  # Example: limit episode length to prevent infinite episodes
+        # Check if the goal has been reached
+        goal_reached = self.agent_pos == [8, 8]
+        # if goal_reached:
+        # print("Goal reached")
+        if self.step_count >= max_steps or goal_reached:
+            terminated = True
 
-        return self.observation_space_tensor, reward, terminated, truncated, info
+        # Reward for reaching the goal or small penalty for each step
+        reward = 100 if goal_reached else -0.1
+
+        # Ensure that reward is only assigned for valid moves
+        if self.agent_pos == prev_position and not goal_reached:
+            # Penalize for attempting and failing to move (hitting a wall)
+            reward = -1
+
+        return self.observation_space_tensor, reward, terminated, False, {}
 
     def calc_distance(self, pos1, pos2):
         return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])

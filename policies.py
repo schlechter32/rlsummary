@@ -2,7 +2,8 @@ import numpy as np
 import torch
 
 
-def epsilon_greedy_policy(action_probs, epsilon=0.001):
+def epsilon_greedy_policy(action_probs, no_episode):
+    epsilon = max(0.099 * 1 / (no_episode + 1), 0)
     if np.random.rand() < epsilon:
         # print(action_probs)
 
@@ -25,10 +26,11 @@ def epsilon_greedy_policy(action_probs, epsilon=0.001):
 # the action with the middle index has an 80% chance of being selected, but there's still a 20% chance collectively that one of the other two actions will be sampled.
 # To always select the action with the highest probability, you would use something like torch.argmax(action_probs), which deterministically selects the action with the highest probability, effectively removing the stochastic nature of the action selection
 # However, this approach is typically used during evaluation of the policy rather than during training, where exploration is necessary.
-def pure_stochastic(action_probs, rand_decay=0.99):
+def pure_stochastic(action_probs, no_episode):
     # Convert the action probabilities to a multinomial distribution and then sample
     # print(f"Action probs are {action_probs}")
 
+    # print(f"Actionprobs in policy are {action_probs}")
     action = torch.distributions.Categorical(action_probs).sample()
     # print(f"Action is {action.item()}")
     return (

@@ -21,10 +21,10 @@ print(f"Actionspace size flat: {output_dim}")
 # %% Main Loop
 # neural_net = PolicyNetwork(input_dim, output_dim)
 
-neural_net = PolicyValueNetwork(input_dim, output_dim).to(device)
-optimizer = optim.SGD(neural_net.parameters(), lr=1e-2)
+neural_net = PolicyNetwork(input_dim, output_dim).to(device)
+optimizer = optim.Adam(neural_net.parameters(), lr=1e-4)
 policy = pure_stochastic
 model = RlModel(neural_net, optimizer)
-trainer = Trainer(model, policy, env, 10000, 1, 0.99)
-trainer.a2c()
+trainer = Trainer(model, policy, env, 1000, 1, 0.99)
+trainer.reinforce()
 # %%
