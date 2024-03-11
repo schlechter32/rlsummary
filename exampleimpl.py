@@ -359,17 +359,6 @@ def ppo(
             )
             break
 
-        # print(f"Current update is {update}")
-        # print(
-        #     f"Trying to visualize every {visualize_every}, for {
-        #         episodes_per_update} episodes_per_update"
-        # )
-        # print(f"The math result is{visualize_every // episodes_per_update}")
-        #
-        # print(
-        #     f"Running visu test{(update + 1) %
-        #                         (visualize_every // episodes_per_update)}"
-        # )
         if (update + 1) % (visualize_every // episodes_per_update) == 0:
             print(f"Update {update + 1}: Average Total Reward = {avg_reward}")
             path = simulate_episode_for_visualization(policy_network, env)
